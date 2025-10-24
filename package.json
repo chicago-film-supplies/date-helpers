@@ -1,0 +1,24 @@
+{
+  "name": "@cfs/date-helpers",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Shared date helper functions for CFS applications",
+  "main": "index.js",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chicago-film-supplies/date-helpers.git"
+  },
+  "keywords": [
+    "date",
+    "holidays",
+    "business-days",
+    "rental-calculations"
+  ],
+  "author": "Chicago Film Supplies",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "date-fns": "^4.1.0",
+    "@date-fns/tz": "^1.1.2"
+  }
+}
