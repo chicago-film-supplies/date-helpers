@@ -1,10 +1,12 @@
 {
-  "name": "@cfs/date-helpers",
+  "name": "@chicago-film-supplies/date-helpers",
   "version": "0.1.0",
   "type": "module",
   "description": "Shared date helper functions for CFS applications",
   "main": "index.js",
-  "private": true,
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/chicago-film-supplies/date-helpers.git"
