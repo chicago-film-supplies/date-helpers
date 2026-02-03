@@ -1,6 +1,6 @@
 {
   "name": "@chicago-film-supplies/date-helpers",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "Shared date helper functions for CFS applications",
   "main": "index.js",
