@@ -37,7 +37,37 @@ jobs:
         run: npm audit signatures
 
       - name: Release
+        id: semantic
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx semantic-release
+        run: |
+          npx semantic-release
+          # Check if a new version was released by looking at package.json
+          VERSION=$(node -p "require('./package.json').version")
+          if git tag --list "v$VERSION" | grep -q .; then
+            echo "new_release=true" >> $GITHUB_OUTPUT
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "Released version: $VERSION"
+          else
+            echo "new_release=false" >> $GITHUB_OUTPUT
+            echo "No new release"
+          fi
+
+      - name: Dispatch to api
+        if: steps.semantic.outputs.new_release == 'true'
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.REPO_DISPATCH_PAT }}
+          repository: chicago-film-supplies/api
+          event-type: date-helpers-updated
+          client-payload: '{"package": "@chicago-film-supplies/date-helpers", "version": "${{ steps.semantic.outputs.version }}", "channel": "${{ github.ref_name == ''main'' && ''latest'' || ''beta'' }}"}'
+
+      - name: Dispatch to manager
+        if: steps.semantic.outputs.new_release == 'true'
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.REPO_DISPATCH_PAT }}
+          repository: chicago-film-supplies/manager
+          event-type: date-helpers-updated
+          client-payload: '{"package": "@chicago-film-supplies/date-helpers", "version": "${{ steps.semantic.outputs.version }}", "channel": "${{ github.ref_name == ''main'' && ''latest'' || ''beta'' }}"}'
