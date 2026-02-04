@@ -1,0 +1,21 @@
+name: Dispatch to Dependent Repos
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  dispatch:
+    name: Trigger Dependent Repos
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        repo: ['chicago-film-supplies/api', 'chicago-film-supplies/manager']
+    steps:
+      - name: Trigger dependent repos
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.REPO_DISPATCH_PAT }}
+          repository: ${{ matrix.repo }}
+          event-type: date-helpers-updated
+          client-payload: '{"package": "@chicago-film-supplies/date-helpers", "version": "${{ github.event.release.tag_name }}", "channel": "${{ github.event.release.prerelease && ''beta'' || ''latest'' }}"}'
