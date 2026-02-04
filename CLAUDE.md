@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+test release
+
 This file provides guidance to Claude Code (claude.ai/code) when working with this repository.
 
 ## Purpose
