@@ -3,6 +3,7 @@
     "main",
     {
       "name": "dev",
+      "channel": "beta",
       "prerelease": "beta"
     }
   ],
