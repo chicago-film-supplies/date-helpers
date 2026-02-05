@@ -69,3 +69,26 @@ jobs:
           repository: chicago-film-supplies/manager
           event-type: date-helpers-updated
           client-payload: '{"package": "@chicago-film-supplies/date-helpers", "version": "${{ steps.semantic.outputs.version }}", "channel": "${{ github.ref_name == ''main'' && ''latest'' || ''beta'' }}"}'
+
+  sync-dev:
+    name: Sync dev to match main (FF-only)
+    if: github.ref_name == 'main'
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout dev branch
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
+      - name: Configure Git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Fast-forward dev to main
+        run: |
+          git fetch origin main
+          git merge --ff-only origin/main
+          git push origin dev
