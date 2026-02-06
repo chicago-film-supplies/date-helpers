@@ -65,10 +65,19 @@ jobs:
       matrix:
         repo: ['chicago-film-supplies/api', 'chicago-film-supplies/manager']
     steps:
+      - name: Set channel
+        id: channel
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "value=latest" >> $GITHUB_OUTPUT
+          else
+            echo "value=beta" >> $GITHUB_OUTPUT
+          fi
+
       - name: Repository Dispatch
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.REPO_DISPATCH_PAT }}
           repository: ${{ matrix.repo }}
           event-type: date-helpers-updated
-          client-payload: '{"package": "@chicago-film-supplies/date-helpers", "version": "${{ needs.release.outputs.version }}", "channel": "${{ github.ref_name == ''main'' && ''latest'' || ''beta'' }}"}'
+          client-payload: '{"package": "@chicago-film-supplies/date-helpers", "version": "${{ needs.release.outputs.version }}", "channel": "${{ steps.channel.outputs.value }}"}'
