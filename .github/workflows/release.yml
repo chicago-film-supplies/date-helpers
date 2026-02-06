@@ -2,7 +2,7 @@ name: Release
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main, beta, pre-*, beta-*]
 
 permissions:
   contents: read
@@ -27,7 +27,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 'lts/*'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies
@@ -52,43 +52,32 @@ jobs:
             echo "new_release=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Dispatch to api
-        if: steps.semantic.outputs.new_release == 'true'
-        uses: peter-evans/repository-dispatch@v3
-        with:
-          token: ${{ secrets.REPO_DISPATCH_PAT }}
-          repository: chicago-film-supplies/api
-          event-type: date-helpers-updated
-          client-payload: '{"package": "@chicago-film-supplies/date-helpers", "version": "${{ steps.semantic.outputs.version }}", "channel": "${{ github.ref_name == ''main'' && ''latest'' || ''beta'' }}"}'
+    outputs:
+      new_release: ${{ steps.semantic.outputs.new_release }}
+      version: ${{ steps.semantic.outputs.version }}
 
-      - name: Dispatch to manager
-        if: steps.semantic.outputs.new_release == 'true'
-        uses: peter-evans/repository-dispatch@v3
-        with:
-          token: ${{ secrets.REPO_DISPATCH_PAT }}
-          repository: chicago-film-supplies/manager
-          event-type: date-helpers-updated
-          client-payload: '{"package": "@chicago-film-supplies/date-helpers", "version": "${{ steps.semantic.outputs.version }}", "channel": "${{ github.ref_name == ''main'' && ''latest'' || ''beta'' }}"}'
-
-  sync-dev:
-    name: Sync dev to match main (FF-only)
-    if: github.ref_name == 'main'
+  dispatch:
+    name: Dispatch to consumers
     needs: release
+    if: needs.release.outputs.new_release == 'true'
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    strategy:
+      matrix:
+        repo: ['chicago-film-supplies/api', 'chicago-film-supplies/manager']
     steps:
-      - name: Checkout dev branch
-        uses: actions/checkout@v4
+      - name: Set channel
+        id: channel
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "value=latest" >> $GITHUB_OUTPUT
+          else
+            echo "value=beta" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Repository Dispatch
+        uses: peter-evans/repository-dispatch@v3
         with:
-          ref: dev
-          fetch-depth: 0
-      - name: Configure Git identity
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-      - name: Fast-forward dev to main
-        run: |
-          git fetch origin main
-          git merge --ff-only origin/main
-          git push origin dev
+          token: ${{ secrets.REPO_DISPATCH_PAT }}
+          repository: ${{ matrix.repo }}
+          event-type: date-helpers-updated
+          client-payload: '{"package": "@chicago-film-supplies/date-helpers", "version": "${{ needs.release.outputs.version }}", "channel": "${{ steps.channel.outputs.value }}"}'

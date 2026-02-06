@@ -1,0 +1,9 @@
+branch=$(git rev-parse --abbrev-ref HEAD)
+
+if ! echo "$branch" | grep -qE '^(main|beta|pre-.+|beta-.+)$'; then
+  echo "ERROR: Branch \"$branch\" does not match allowed patterns: main, beta, pre-*, beta-*"
+  echo "Rename your branch before pushing."
+  exit 1
+fi
+
+npm test

@@ -58,19 +58,19 @@ All functions accept a `holidays` array parameter (array of ISO date strings):
 
 1. Edit functions in `index.js`
 2. Add/update JSDoc comments for all modified functions
-3. Test manually by importing into a consuming repo (api or manager)
-4. Update version in `package.json` following semver
-5. Update `README.md` if API changes
+3. Run `npm test` and `npm run lint` to verify changes
+4. Update `README.md` if API changes
 
 ### Testing
 
-**TODO**: Add ESLint for code quality checks before release
+Tests use [Vitest](https://vitest.dev/) and live in `index.test.js`.
 
-Currently no automated tests. Test changes by:
-1. Link package locally: `npm link` (in date-helpers directory)
-2. Link in consuming repo: `npm link @cfs/date-helpers` (in api/functions or manager)
-3. Test the affected functionality in the consuming application
-4. Unlink when done: `npm unlink @cfs/date-helpers` (in consuming repo)
+```bash
+npm test        # run tests once
+npm run lint    # run ESLint
+```
+
+CI runs lint and tests on every PR to `main` via `.github/workflows/ci.yml`. The `Lint & Test` job must pass before merging.
 
 ## Version Management
 
@@ -80,25 +80,13 @@ This package follows semantic versioning:
 
 ### Release Process
 
-1. Make and test changes
-2. Update version in `package.json`:
-   - Patch (0.1.0 → 0.1.1): Bug fixes
-   - Minor (0.1.0 → 0.2.0): New features, non-breaking changes
-   - Major (0.x.x → 1.0.0): Breaking changes, stable release
-3. Commit changes:
-   ```bash
-   git commit -am "feat: description of changes"
-   ```
-4. Create and push tag:
-   ```bash
-   git tag v0.2.0
-   git push origin main
-   git push origin v0.2.0
-   ```
-5. Update consuming repos:
-   - Edit `package.json` in `api/functions` and `manager`
-   - Update version: `"@cfs/date-helpers": "git+https://github.com/chicago-film-supplies/date-helpers.git#v0.2.0"`
-   - Run `npm install`
+Releases are automated via [semantic-release](https://semantic-release.gitbook.io/) in `.github/workflows/release.yml`. Use [Conventional Commits](https://www.conventionalcommits.org/):
+
+- `fix: ...` → patch release
+- `feat: ...` → minor release
+- `feat!: ...` or `BREAKING CHANGE:` → major release
+
+On merge to `main` (or `beta`), semantic-release creates a GitHub release and publishes to GitHub Packages, then dispatches update events to consuming repos (api, manager).
 
 ## Business Logic
 
