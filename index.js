@@ -64,25 +64,22 @@ export function getDefaultStartDate(holidays) {
     throw new Error("holidays must be an array");
   }
 
-  let today = TZDate.tz("America/Chicago");
+  let day = TZDate.tz("America/Chicago");
 
   // If we're past 8am, default to tomorrow
-  if (getHours(today) > 8) {
-    today = addDays(today, 1);
+  if (getHours(day) > 8) {
+    day = addDays(day, 1);
   }
 
   // Set to 9am
-  today = setHours(today, 9);
-  today = setMinutes(today, 0);
-  today = setSeconds(today, 0);
-  today = setMilliseconds(today, 0);
+  day = set(day, { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 });
 
   // Skip weekends and holidays
-  while (isWeekend(today) === true || isHoliday(today, holidays)) {
-    today = addDays(today, 1);
+  while (isWeekend(day) === true || isHoliday(day, holidays)) {
+    day = addDays(day, 1);
   }
 
-  return today;
+  return day;
 }
 
 /**
