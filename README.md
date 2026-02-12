@@ -20,6 +20,7 @@ import {
   isOffHours,
   getDefaultStartDate,
   getEndDateByChargePeriod,
+  countCfsBusinessDays,
   getDuration
 } from '@cfs/date-helpers';
 
@@ -38,9 +39,18 @@ const startDate = getDefaultStartDate(holidays);
 // Calculate end date (5 chargeable days from start)
 const endDate = getEndDateByChargePeriod(startDate, 5, holidays);
 
-// Get duration between dates
-const duration = getDuration(startDate, endDate, holidays);
-console.log(duration.chargeLabel); // "1 week"
+// Count business days between two date objects
+const count = countCfsBusinessDays(startDate, endDate, holidays);
+console.log(count.periodLabel); // "1 week"
+
+// Get active + charge durations for an order's dates
+const duration = getDuration({
+  delivery_start: '2024-06-17T14:00:00.000Z',
+  collection_start: '2024-06-21T20:00:00.000Z',
+  charge_start: '',  // optional, falls back to delivery_start
+  charge_end: '',    // optional, falls back to collection_start
+}, holidays);
+console.log(duration.activePeriodLabel); // "1 week"
 ```
 
 ## API
@@ -75,7 +85,7 @@ Get the default start date for a rental (next business day at 9am). If after 8am
 
 ### `getEndDateByChargePeriod(startDate, chargePeriod, holidays)`
 
-Calculate end date based on start date and number of chargeable days. Chargeable days exclude weekends and holidays.
+Calculate end date based on start date and number of chargeable days. The start date itself counts as the first chargeable day. Chargeable days exclude weekends and holidays.
 
 **Parameters:**
 - `startDate` (Date): date-fns date object
@@ -84,13 +94,13 @@ Calculate end date based on start date and number of chargeable days. Chargeable
 
 **Returns:** `Date` (end date)
 
-### `getDuration(start, end, holidays)`
+### `countCfsBusinessDays(start, end, holidays)`
 
-Calculate duration between two dates including chargeable days.
+Count CFS business days between two date objects (excludes weekends and CFS holidays).
 
 **Parameters:**
-- `start` (Date): date-fns date object for rental start
-- `end` (Date): date-fns date object for rental end
+- `start` (Date): date-fns date object
+- `end` (Date): date-fns date object
 - `holidays` (Array<string>): Array of ISO date strings
 
 **Returns:**
@@ -98,9 +108,38 @@ Calculate duration between two dates including chargeable days.
 {
   calendarDays: number,
   calendarWeeks: number,
-  chargeableDays: number,
-  chargeableWeeks: number,
-  chargeLabel: string  // e.g., "1 week", "3 days"
+  days: number,          // business days count
+  weeks: number,         // days / 5
+  label: string,         // unit only, e.g., "week", "days"
+  periodLabel: string    // e.g., "1 week", "3 days"
+}
+```
+
+### `getDuration(dates, holidays)`
+
+Calculate active and chargeable durations for an order's dates. Accepts the full order dates object and returns both "active" (delivery_start → collection_start) and "charge" (charge_start → charge_end) durations.
+
+When `charge_start` or `charge_end` are empty/missing, they fall back to `delivery_start`/`collection_start` respectively. When charge dates equal delivery/collection dates, the charge values are reused from the active calculation (not recalculated).
+
+**Parameters:**
+- `dates` (object): Order dates object with:
+  - `delivery_start` (string, required): ISO date string
+  - `collection_start` (string, required): ISO date string
+  - `charge_start` (string, optional): ISO date string, falls back to `delivery_start`
+  - `charge_end` (string, optional): ISO date string, falls back to `collection_start`
+- `holidays` (Array<string>): Array of ISO date strings
+
+**Returns:**
+```javascript
+{
+  activeDays: number,          // business days: delivery_start → collection_start
+  activeWeeks: number,         // activeDays / 5
+  activeLabel: string,         // "day" | "days" | "week" | "weeks"
+  activePeriodLabel: string,   // e.g., "3 days"
+  chargeDays: number,          // business days: charge_start → charge_end
+  chargeWeeks: number,         // chargeDays / 5
+  chargeLabel: string,         // "day" | "days" | "week" | "weeks"
+  chargePeriodLabel: string    // e.g., "2 weeks"
 }
 ```
 
