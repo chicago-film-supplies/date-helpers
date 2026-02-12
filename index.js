@@ -105,7 +105,7 @@ export function getEndDateByChargePeriod(startDate, chargePeriod, holidays) {
     throw new Error("holidays must be an array");
   }
 
-  let endDate = addDays(startDate, 1);
+  let endDate = startDate;
   let chargeableDays = 0;
 
   while (chargeableDays < chargePeriod) {

@@ -143,31 +143,31 @@ describe("getDefaultStartDate", () => {
 });
 
 describe("getEndDateByChargePeriod", () => {
-  it("returns next day for 1 chargeable day (no weekends/holidays)", () => {
+  it("returns same day for 1 chargeable day (no weekends/holidays)", () => {
     // Monday June 17, 2024
     const startDate = new TZDate(2024, 5, 17, 9, 0, 0, "America/Chicago");
     const result = getEndDateByChargePeriod(startDate, 1, []);
-    expect(result.getDate()).toBe(18); // Tuesday
+    expect(result.getDate()).toBe(17); // Monday (start day is first chargeable day)
   });
 
   it("calculates correctly for multiple chargeable days", () => {
     // Monday June 17, 2024
     const startDate = new TZDate(2024, 5, 17, 9, 0, 0, "America/Chicago");
     const result = getEndDateByChargePeriod(startDate, 3, []);
-    expect(result.getDate()).toBe(20); // Thursday (Tue, Wed, Thu = 3 days)
+    expect(result.getDate()).toBe(19); // Wednesday (Mon, Tue, Wed = 3 days)
   });
 
   it("skips weekends when calculating chargeable days", () => {
     // Thursday June 20, 2024
     const startDate = new TZDate(2024, 5, 20, 9, 0, 0, "America/Chicago");
     const result = getEndDateByChargePeriod(startDate, 3, []);
-    // Fri 21 (1), skip Sat/Sun, Mon 24 (2), Tue 25 (3)
-    expect(result.getDate()).toBe(25);
+    // Thu 20 (1), Fri 21 (2), skip Sat/Sun, Mon 24 (3)
+    expect(result.getDate()).toBe(24);
   });
 
   it("skips holidays when calculating chargeable days", () => {
-    // Monday July 1, 2024
-    const startDate = new TZDate(2024, 6, 1, 9, 0, 0, "America/Chicago");
+    // Tuesday July 2, 2024
+    const startDate = new TZDate(2024, 6, 2, 9, 0, 0, "America/Chicago");
     const result = getEndDateByChargePeriod(startDate, 3, ["2024-07-04"]);
     // Tue 2 (1), Wed 3 (2), skip Thu 4 (holiday), Fri 5 (3)
     expect(result.getDate()).toBe(5);
@@ -177,8 +177,27 @@ describe("getEndDateByChargePeriod", () => {
     // Monday June 17, 2024
     const startDate = new TZDate(2024, 5, 17, 9, 0, 0, "America/Chicago");
     const result = getEndDateByChargePeriod(startDate, 5, []);
-    // Tue 18 (1), Wed 19 (2), Thu 20 (3), Fri 21 (4), Mon 24 (5)
-    expect(result.getDate()).toBe(24);
+    // Mon 17 (1), Tue 18 (2), Wed 19 (3), Thu 20 (4), Fri 21 (5)
+    expect(result.getDate()).toBe(21);
+  });
+
+  it("round-trips with getDuration", () => {
+    const startDate = new TZDate(2024, 5, 17, 9, 0, 0, "America/Chicago");
+    for (const period of [1, 2, 3, 5, 10]) {
+      const endDate = getEndDateByChargePeriod(startDate, period, []);
+      const duration = getDuration(startDate, endDate, []);
+      expect(duration.chargeableDays).toBe(period);
+    }
+  });
+
+  it("round-trips with getDuration across holidays", () => {
+    const startDate = new TZDate(2024, 6, 1, 9, 0, 0, "America/Chicago");
+    const testHolidays = ["2024-07-04"];
+    for (const period of [1, 3, 5, 10]) {
+      const endDate = getEndDateByChargePeriod(startDate, period, testHolidays);
+      const duration = getDuration(startDate, endDate, testHolidays);
+      expect(duration.chargeableDays).toBe(period);
+    }
   });
 
   it("throws error for invalid startDate", () => {

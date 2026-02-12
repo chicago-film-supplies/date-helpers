@@ -63,7 +63,7 @@ All functions accept a `holidays` array parameter (array of ISO date strings):
 
 ### Testing
 
-Tests use [Vitest](https://vitest.dev/) and live in `index.test.js`.
+Tests use [Vitest](https://vitest.dev/) and live in `index.test.js`. **Any new function must have corresponding tests. Any time an existing function is edited, its tests must be reviewed and updated if needed.**
 
 ```bash
 npm test        # run tests once
