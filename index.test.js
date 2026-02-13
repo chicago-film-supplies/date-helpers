@@ -5,6 +5,7 @@ import {
   isOffHours,
   getDefaultStartDate,
   getEndDateByChargePeriod,
+  countCfsBusinessDays,
   getDuration
 } from "./index.js";
 
@@ -143,31 +144,31 @@ describe("getDefaultStartDate", () => {
 });
 
 describe("getEndDateByChargePeriod", () => {
-  it("returns next day for 1 chargeable day (no weekends/holidays)", () => {
+  it("returns same day for 1 chargeable day (no weekends/holidays)", () => {
     // Monday June 17, 2024
     const startDate = new TZDate(2024, 5, 17, 9, 0, 0, "America/Chicago");
     const result = getEndDateByChargePeriod(startDate, 1, []);
-    expect(result.getDate()).toBe(18); // Tuesday
+    expect(result.getDate()).toBe(17); // Monday (start day is first chargeable day)
   });
 
   it("calculates correctly for multiple chargeable days", () => {
     // Monday June 17, 2024
     const startDate = new TZDate(2024, 5, 17, 9, 0, 0, "America/Chicago");
     const result = getEndDateByChargePeriod(startDate, 3, []);
-    expect(result.getDate()).toBe(20); // Thursday (Tue, Wed, Thu = 3 days)
+    expect(result.getDate()).toBe(19); // Wednesday (Mon, Tue, Wed = 3 days)
   });
 
   it("skips weekends when calculating chargeable days", () => {
     // Thursday June 20, 2024
     const startDate = new TZDate(2024, 5, 20, 9, 0, 0, "America/Chicago");
     const result = getEndDateByChargePeriod(startDate, 3, []);
-    // Fri 21 (1), skip Sat/Sun, Mon 24 (2), Tue 25 (3)
-    expect(result.getDate()).toBe(25);
+    // Thu 20 (1), Fri 21 (2), skip Sat/Sun, Mon 24 (3)
+    expect(result.getDate()).toBe(24);
   });
 
   it("skips holidays when calculating chargeable days", () => {
-    // Monday July 1, 2024
-    const startDate = new TZDate(2024, 6, 1, 9, 0, 0, "America/Chicago");
+    // Tuesday July 2, 2024
+    const startDate = new TZDate(2024, 6, 2, 9, 0, 0, "America/Chicago");
     const result = getEndDateByChargePeriod(startDate, 3, ["2024-07-04"]);
     // Tue 2 (1), Wed 3 (2), skip Thu 4 (holiday), Fri 5 (3)
     expect(result.getDate()).toBe(5);
@@ -177,8 +178,27 @@ describe("getEndDateByChargePeriod", () => {
     // Monday June 17, 2024
     const startDate = new TZDate(2024, 5, 17, 9, 0, 0, "America/Chicago");
     const result = getEndDateByChargePeriod(startDate, 5, []);
-    // Tue 18 (1), Wed 19 (2), Thu 20 (3), Fri 21 (4), Mon 24 (5)
-    expect(result.getDate()).toBe(24);
+    // Mon 17 (1), Tue 18 (2), Wed 19 (3), Thu 20 (4), Fri 21 (5)
+    expect(result.getDate()).toBe(21);
+  });
+
+  it("round-trips with countCfsBusinessDays", () => {
+    const startDate = new TZDate(2024, 5, 17, 9, 0, 0, "America/Chicago");
+    for (const period of [1, 2, 3, 5, 10]) {
+      const endDate = getEndDateByChargePeriod(startDate, period, []);
+      const duration = countCfsBusinessDays(startDate, endDate, []);
+      expect(duration.days).toBe(period);
+    }
+  });
+
+  it("round-trips with countCfsBusinessDays across holidays", () => {
+    const startDate = new TZDate(2024, 6, 1, 9, 0, 0, "America/Chicago");
+    const testHolidays = ["2024-07-04"];
+    for (const period of [1, 3, 5, 10]) {
+      const endDate = getEndDateByChargePeriod(startDate, period, testHolidays);
+      const duration = countCfsBusinessDays(startDate, endDate, testHolidays);
+      expect(duration.days).toBe(period);
+    }
   });
 
   it("throws error for invalid startDate", () => {
@@ -198,89 +218,238 @@ describe("getEndDateByChargePeriod", () => {
   });
 });
 
-describe("getDuration", () => {
-  it("calculates 1 chargeable day correctly", () => {
-    // Monday to Monday (same day)
+describe("countCfsBusinessDays", () => {
+  it("counts 1 business day for same-day range", () => {
     const start = new TZDate(2024, 5, 17, 9, 0, 0, "America/Chicago");
     const end = new TZDate(2024, 5, 17, 17, 0, 0, "America/Chicago");
-    const result = getDuration(start, end, []);
+    const result = countCfsBusinessDays(start, end, []);
+    expect(result.days).toBe(1);
     expect(result.calendarDays).toBe(1);
-    expect(result.chargeableDays).toBe(1);
-    expect(result.chargeLabel).toBe("1 day");
+    expect(result.label).toBe("day");
+    expect(result.periodLabel).toBe("1 day");
   });
 
-  it("calculates multiple chargeable days correctly", () => {
-    // Monday to Wednesday
+  it("counts multiple business days correctly", () => {
     const start = new TZDate(2024, 5, 17, 9, 0, 0, "America/Chicago");
     const end = new TZDate(2024, 5, 19, 17, 0, 0, "America/Chicago");
-    const result = getDuration(start, end, []);
+    const result = countCfsBusinessDays(start, end, []);
+    expect(result.days).toBe(3);
     expect(result.calendarDays).toBe(3);
-    expect(result.chargeableDays).toBe(3);
-    expect(result.chargeLabel).toBe("3 days");
+    expect(result.label).toBe("days");
+    expect(result.periodLabel).toBe("3 days");
   });
 
-  it("excludes weekends from chargeable days", () => {
-    // Thursday to Tuesday (spans weekend)
+  it("excludes weekends", () => {
     const start = new TZDate(2024, 5, 20, 9, 0, 0, "America/Chicago"); // Thursday
     const end = new TZDate(2024, 5, 25, 17, 0, 0, "America/Chicago"); // Tuesday
-    const result = getDuration(start, end, []);
+    const result = countCfsBusinessDays(start, end, []);
     expect(result.calendarDays).toBe(6);
-    expect(result.chargeableDays).toBe(4); // Thu, Fri, Mon, Tue
+    expect(result.days).toBe(4); // Thu, Fri, Mon, Tue
   });
 
-  it("excludes holidays from chargeable days", () => {
-    // Monday to Friday with holiday on Wednesday
+  it("excludes holidays", () => {
     const start = new TZDate(2024, 6, 1, 9, 0, 0, "America/Chicago");
     const end = new TZDate(2024, 6, 5, 17, 0, 0, "America/Chicago");
-    const result = getDuration(start, end, ["2024-07-04"]);
+    const result = countCfsBusinessDays(start, end, ["2024-07-04"]);
     expect(result.calendarDays).toBe(5);
-    expect(result.chargeableDays).toBe(4); // excludes July 4
+    expect(result.days).toBe(4);
   });
 
-  it("calculates 1 week (5 chargeable days) correctly", () => {
-    // Monday to Friday
+  it("calculates 1 week (5 business days) correctly", () => {
     const start = new TZDate(2024, 5, 17, 9, 0, 0, "America/Chicago");
     const end = new TZDate(2024, 5, 21, 17, 0, 0, "America/Chicago");
-    const result = getDuration(start, end, []);
-    expect(result.chargeableDays).toBe(5);
-    expect(result.chargeableWeeks).toBe(1);
-    expect(result.chargeLabel).toBe("1 week");
+    const result = countCfsBusinessDays(start, end, []);
+    expect(result.days).toBe(5);
+    expect(result.weeks).toBe(1);
+    expect(result.label).toBe("week");
+    expect(result.periodLabel).toBe("1 week");
   });
 
   it("calculates multiple weeks correctly", () => {
-    // 2 weeks = 10 chargeable days
-    const start = new TZDate(2024, 5, 17, 9, 0, 0, "America/Chicago"); // Monday
-    const end = new TZDate(2024, 5, 28, 17, 0, 0, "America/Chicago"); // Friday (2 weeks later)
-    const result = getDuration(start, end, []);
-    expect(result.chargeableDays).toBe(10);
-    expect(result.chargeableWeeks).toBe(2);
-    expect(result.chargeLabel).toBe("2 weeks");
+    const start = new TZDate(2024, 5, 17, 9, 0, 0, "America/Chicago");
+    const end = new TZDate(2024, 5, 28, 17, 0, 0, "America/Chicago");
+    const result = countCfsBusinessDays(start, end, []);
+    expect(result.days).toBe(10);
+    expect(result.weeks).toBe(2);
+    expect(result.label).toBe("weeks");
+    expect(result.periodLabel).toBe("2 weeks");
   });
 
   it("calculates partial weeks correctly", () => {
-    // 12 chargeable days = 2.4 weeks
     const start = new TZDate(2024, 5, 17, 9, 0, 0, "America/Chicago");
     const end = new TZDate(2024, 6, 2, 17, 0, 0, "America/Chicago");
-    const result = getDuration(start, end, []);
-    expect(result.chargeableWeeks).toBe(result.chargeableDays / 5);
-    expect(result.chargeLabel).toContain("weeks");
+    const result = countCfsBusinessDays(start, end, []);
+    expect(result.weeks).toBe(result.days / 5);
+    expect(result.label).toBe("weeks");
+    expect(result.periodLabel).toContain("weeks");
   });
 
   it("throws error for invalid start date", () => {
     const end = new TZDate(2024, 5, 17, 17, 0, 0, "America/Chicago");
-    expect(() => getDuration(null, end, [])).toThrow("start or end not a valid date object");
-    expect(() => getDuration(new Date("invalid"), end, [])).toThrow("start or end not a valid date object");
+    expect(() => countCfsBusinessDays(null, end, [])).toThrow("start and end must be valid date objects");
+    expect(() => countCfsBusinessDays(new Date("invalid"), end, [])).toThrow("start and end must be valid date objects");
   });
 
   it("throws error for invalid end date", () => {
     const start = new TZDate(2024, 5, 17, 9, 0, 0, "America/Chicago");
-    expect(() => getDuration(start, null, [])).toThrow("start or end not a valid date object");
-    expect(() => getDuration(start, new Date("invalid"), [])).toThrow("start or end not a valid date object");
+    expect(() => countCfsBusinessDays(start, null, [])).toThrow("start and end must be valid date objects");
+    expect(() => countCfsBusinessDays(start, new Date("invalid"), [])).toThrow("start and end must be valid date objects");
   });
 
   it("throws error when holidays is not an array", () => {
     const start = new TZDate(2024, 5, 17, 9, 0, 0, "America/Chicago");
     const end = new TZDate(2024, 5, 19, 17, 0, 0, "America/Chicago");
-    expect(() => getDuration(start, end, null)).toThrow("holidays must be an array");
+    expect(() => countCfsBusinessDays(start, end, null)).toThrow("holidays must be an array");
+  });
+});
+
+describe("getDuration", () => {
+  it("calculates active duration for basic date range", () => {
+    const start = new TZDate(2024, 5, 17, 9, 0, 0, "America/Chicago");
+    const end = new TZDate(2024, 5, 17, 17, 0, 0, "America/Chicago");
+    const result = getDuration({ delivery_start: start.toISOString(), collection_start: end.toISOString() }, []);
+    expect(result.activeDays).toBe(1);
+    expect(result.activeLabel).toBe("day");
+    expect(result.activePeriodLabel).toBe("1 day");
+  });
+
+  it("calculates multiple active days correctly", () => {
+    const start = new TZDate(2024, 5, 17, 9, 0, 0, "America/Chicago");
+    const end = new TZDate(2024, 5, 19, 17, 0, 0, "America/Chicago");
+    const result = getDuration({ delivery_start: start.toISOString(), collection_start: end.toISOString() }, []);
+    expect(result.activeDays).toBe(3);
+    expect(result.activeLabel).toBe("days");
+    expect(result.activePeriodLabel).toBe("3 days");
+  });
+
+  it("excludes weekends from active days", () => {
+    const start = new TZDate(2024, 5, 20, 9, 0, 0, "America/Chicago"); // Thursday
+    const end = new TZDate(2024, 5, 25, 17, 0, 0, "America/Chicago"); // Tuesday
+    const result = getDuration({ delivery_start: start.toISOString(), collection_start: end.toISOString() }, []);
+    expect(result.activeDays).toBe(4); // Thu, Fri, Mon, Tue
+  });
+
+  it("excludes holidays from active days", () => {
+    const start = new TZDate(2024, 6, 1, 9, 0, 0, "America/Chicago");
+    const end = new TZDate(2024, 6, 5, 17, 0, 0, "America/Chicago");
+    const result = getDuration({ delivery_start: start.toISOString(), collection_start: end.toISOString() }, ["2024-07-04"]);
+    expect(result.activeDays).toBe(4);
+  });
+
+  it("calculates 1 week (5 active days) correctly", () => {
+    const start = new TZDate(2024, 5, 17, 9, 0, 0, "America/Chicago");
+    const end = new TZDate(2024, 5, 21, 17, 0, 0, "America/Chicago");
+    const result = getDuration({ delivery_start: start.toISOString(), collection_start: end.toISOString() }, []);
+    expect(result.activeDays).toBe(5);
+    expect(result.activeWeeks).toBe(1);
+    expect(result.activeLabel).toBe("week");
+    expect(result.activePeriodLabel).toBe("1 week");
+  });
+
+  it("calculates multiple weeks correctly", () => {
+    const start = new TZDate(2024, 5, 17, 9, 0, 0, "America/Chicago");
+    const end = new TZDate(2024, 5, 28, 17, 0, 0, "America/Chicago");
+    const result = getDuration({ delivery_start: start.toISOString(), collection_start: end.toISOString() }, []);
+    expect(result.activeDays).toBe(10);
+    expect(result.activeWeeks).toBe(2);
+    expect(result.activeLabel).toBe("weeks");
+    expect(result.activePeriodLabel).toBe("2 weeks");
+  });
+
+  it("calculates partial weeks correctly", () => {
+    const start = new TZDate(2024, 5, 17, 9, 0, 0, "America/Chicago");
+    const end = new TZDate(2024, 6, 2, 17, 0, 0, "America/Chicago");
+    const result = getDuration({ delivery_start: start.toISOString(), collection_start: end.toISOString() }, []);
+    expect(result.activeWeeks).toBe(result.activeDays / 5);
+    expect(result.activeLabel).toBe("weeks");
+    expect(result.activePeriodLabel).toContain("weeks");
+  });
+
+  it("reuses active values for charge when charge dates match delivery/collection", () => {
+    const start = new TZDate(2024, 5, 17, 9, 0, 0, "America/Chicago");
+    const end = new TZDate(2024, 5, 21, 17, 0, 0, "America/Chicago");
+    const startIso = start.toISOString();
+    const endIso = end.toISOString();
+    const result = getDuration({
+      delivery_start: startIso,
+      collection_start: endIso,
+      charge_start: startIso,
+      charge_end: endIso,
+    }, []);
+    expect(result.chargeDays).toBe(result.activeDays);
+    expect(result.chargeWeeks).toBe(result.activeWeeks);
+    expect(result.chargeLabel).toBe(result.activeLabel);
+    expect(result.chargePeriodLabel).toBe(result.activePeriodLabel);
+  });
+
+  it("reuses active values when charge dates are empty", () => {
+    const start = new TZDate(2024, 5, 17, 9, 0, 0, "America/Chicago");
+    const end = new TZDate(2024, 5, 21, 17, 0, 0, "America/Chicago");
+    const result = getDuration({
+      delivery_start: start.toISOString(),
+      collection_start: end.toISOString(),
+      charge_start: "",
+      charge_end: "",
+    }, []);
+    expect(result.chargeDays).toBe(result.activeDays);
+    expect(result.chargeWeeks).toBe(result.activeWeeks);
+  });
+
+  it("computes charge values independently when charge dates differ", () => {
+    const deliveryStart = new TZDate(2024, 5, 17, 9, 0, 0, "America/Chicago"); // Monday
+    const collectionStart = new TZDate(2024, 5, 21, 17, 0, 0, "America/Chicago"); // Friday (5 days)
+    const chargeStart = new TZDate(2024, 5, 18, 9, 0, 0, "America/Chicago"); // Tuesday
+    const chargeEnd = new TZDate(2024, 5, 20, 17, 0, 0, "America/Chicago"); // Thursday (3 days)
+    const result = getDuration({
+      delivery_start: deliveryStart.toISOString(),
+      collection_start: collectionStart.toISOString(),
+      charge_start: chargeStart.toISOString(),
+      charge_end: chargeEnd.toISOString(),
+    }, []);
+    expect(result.activeDays).toBe(5);
+    expect(result.chargeDays).toBe(3);
+    expect(result.activeLabel).toBe("week");
+    expect(result.chargeLabel).toBe("days");
+  });
+
+  it("round-trips with getEndDateByChargePeriod", () => {
+    const startDate = new TZDate(2024, 5, 17, 9, 0, 0, "America/Chicago");
+    for (const period of [1, 2, 3, 5, 10]) {
+      const endDate = getEndDateByChargePeriod(startDate, period, []);
+      const duration = getDuration({ delivery_start: startDate.toISOString(), collection_start: endDate.toISOString() }, []);
+      expect(duration.activeDays).toBe(period);
+    }
+  });
+
+  it("round-trips with getEndDateByChargePeriod across holidays", () => {
+    const startDate = new TZDate(2024, 6, 1, 9, 0, 0, "America/Chicago");
+    const testHolidays = ["2024-07-04"];
+    for (const period of [1, 3, 5, 10]) {
+      const endDate = getEndDateByChargePeriod(startDate, period, testHolidays);
+      const duration = getDuration({ delivery_start: startDate.toISOString(), collection_start: endDate.toISOString() }, testHolidays);
+      expect(duration.activeDays).toBe(period);
+    }
+  });
+
+  it("throws error when dates is not an object", () => {
+    expect(() => getDuration(null, [])).toThrow("dates must be a non-null object");
+    expect(() => getDuration("invalid", [])).toThrow("dates must be a non-null object");
+    expect(() => getDuration(undefined, [])).toThrow("dates must be a non-null object");
+  });
+
+  it("throws error when delivery_start is missing", () => {
+    expect(() => getDuration({ collection_start: "2024-06-17T09:00:00Z" }, [])).toThrow("dates.delivery_start and dates.collection_start are required");
+    expect(() => getDuration({ delivery_start: "", collection_start: "2024-06-17T09:00:00Z" }, [])).toThrow("dates.delivery_start and dates.collection_start are required");
+  });
+
+  it("throws error when collection_start is missing", () => {
+    expect(() => getDuration({ delivery_start: "2024-06-17T09:00:00Z" }, [])).toThrow("dates.delivery_start and dates.collection_start are required");
+    expect(() => getDuration({ delivery_start: "2024-06-17T09:00:00Z", collection_start: "" }, [])).toThrow("dates.delivery_start and dates.collection_start are required");
+  });
+
+  it("throws error when holidays is not an array", () => {
+    const start = new TZDate(2024, 5, 17, 9, 0, 0, "America/Chicago");
+    const end = new TZDate(2024, 5, 19, 17, 0, 0, "America/Chicago");
+    expect(() => getDuration({ delivery_start: start.toISOString(), collection_start: end.toISOString() }, null)).toThrow("holidays must be an array");
   });
 });
